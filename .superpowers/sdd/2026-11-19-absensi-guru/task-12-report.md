@@ -81,3 +81,35 @@ Per ledger ruling (Task 6/7/11 DB steps): DB-apply/manual verification steps tha
 - Hardcoded 15/15 policy in the client-side preview mirrors the DB defaults (`school_settings` defaults 15/15; RPC reads school settings). Client preview is advisory only; the RPC is authoritative.
 - WIB fixed at UTC+7 (matches schema default `timezone_offset_minutes = 420`; tz-hardcode already parked as a minor from Task 9).
 - Test file uses `beforeEach(vi.clearAllMocks())` per repo convention.
+
+---
+
+## Fix round 1 — 3 Important review findings
+
+Commit: `fix: session refetch after scan, error surface, accurate duplicate display`
+
+### Finding 1 — invalidation token mismatch (stale session after confirm)
+
+**Root cause:** ScanPage called `useRecordAttendance()` without the token, so the hook invalidated `['attendance-session', '']` which never matched the active `['attendance-session', token]` query — the session query never refetched after a scan.
+
+**Fix (mechanism: prefix-based invalidation, parameterless hook):**
+- `queryKeys` gains `todaySessionsPrefix: ['attendance-sessions']` and `sessionByTokenPrefix: ['attendance-session']`
+- `useRecordAttendance()` (now parameterless — token still flows through `mutate(token)`) invalidates both **prefixes**, so refetch happens regardless of which token/date key is active. This is strictly more robust than per-token keying: it also refreshes the today-list across a WIB date rollover (the old code computed the date at invalidation time but the exact-key list still missed if the date key changed).
+- Acceptance criterion (session query refetches after successful scan) is now covered by a hook-level integration test: renders `useSessionByToken` + `useTodaySessions` + `useRecordAttendance()` in a real `QueryClient`, flips the mocked server data from "no record" to "has record" after `mutateAsync`, and asserts both queries refetch (record appears) — even though the mutation hook receives no token.
+
+### Finding 2 — mutation error never rendered
+
+**Fix:** ScanPage renders `{record.error && <ErrorBox message={`Gagal mencatat kehadiran: ${record.error.message}`} />}` below the confirm button. Network/RPC failures (which `recordAttendance` throws) now surface clearly instead of silently re-enabling the button.
+
+### Finding 3 — duplicate flow showed wrong scan time + wrong status label
+
+**Fixes:**
+- `RecordAttendanceResult.scannedAt` is now optional and **not set on duplicate** — the re-click time is never presented as the scan time.
+- `ResultPanel` takes the refetched session record; on duplicate it prefers `sessionRecord.scannedAt` (made available by Finding 1's refetch), and falls back to showing the duplicate message **without any timestamp** rather than a wrong one.
+- Duplicate copy is status-aware: `Kamu sudah tercatat {Hadir|Terlambat}` (was always "hadir"); the already-scanned card notice likewise shows the actual record status.
+
+### Tests
+
+- `npx vitest run tests/features/attendance/queries.test.ts` → **23 passed (23)** (was 21; +1 duplicate-status-label test, +1 invalidation integration test; duplicate test now also asserts `scannedAt` undefined and updated copy)
+- `npx vitest run` (full suite) → **9 files, 69 passed (69)** — no regressions
+- `npx tsc --noEmit` → clean (exit 0)

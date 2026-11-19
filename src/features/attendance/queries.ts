@@ -36,19 +36,38 @@ const RESULT_MESSAGES = {
   terlambat: 'Kehadiran tercatat sebagai Terlambat',
 } as const;
 
+const STATUS_LABELS = {
+  hadir: 'Hadir',
+  terlambat: 'Terlambat',
+} as const;
+
 const REASON_MESSAGES = {
   too_early: 'Sesi belum dibuka. Coba lagi mendekati jam mulai.',
   expired: 'Sesi sudah berakhir',
   not_found: 'Token absen tidak ditemukan atau tidak valid',
   not_yours: 'Link ini bukan untuk jadwal mengajar kamu',
+  /**
+   * Pesan duplicate status-aware: status record lama (hadir/terlambat)
+   * dibawa dari RPC supaya tidak melabeli "terlambat" sebagai "hadir".
+   */
+  duplicate: (status: 'hadir' | 'terlambat') =>
+    `Kamu sudah tercatat ${STATUS_LABELS[status]}`,
 } as const;
 
 /**
  * ScanResult + `message` (teks Indonesia siap tampil) dan `scannedAt`
- * (waktu client; hanya informatif — RPC tidak mengembalikan jam scan).
+ * (waktu client untuk scan baru; tidak diisi untuk duplicate — waktu
+ * scan otoritatif diambil dari `attendance_records.scanned_at` yang
+ * di-refetch setelah invalidasi cache, bukan waktu re-click).
  */
 export type RecordAttendanceResult =
-  | { ok: true; status: 'hadir' | 'terlambat'; duplicate?: boolean; message: string; scannedAt: Date }
+  | {
+      ok: true;
+      status: 'hadir' | 'terlambat';
+      duplicate?: boolean;
+      message: string;
+      scannedAt?: Date;
+    }
   | { ok: false; reason: 'too_early' | 'expired' | 'not_found' | 'not_yours'; message: string };
 
 // =====================================================================
@@ -214,7 +233,10 @@ export async function recordAttendance(token: string): Promise<RecordAttendanceR
 
   if (result.ok) {
     if (result.duplicate) {
-      return { ...result, message: 'Kamu sudah tercatat hadir', scannedAt: new Date() };
+      // Duplicate: JANGAN pakai waktu re-click sebagai waktu scan.
+      // Waktu scan yang benar ada di attendance_records.scanned_at,
+      // tersedia setelah refetch sesi (invalidasi di hook).
+      return { ...result, message: REASON_MESSAGES.duplicate(result.status) };
     }
     return {
       ...result,
@@ -234,7 +256,11 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { UseMutationResult } from '@tanstack/react-query';
 
 export const queryKeys = {
+  /** Prefix semua query sesi hari ini (list per tanggal). */
+  todaySessionsPrefix: ['attendance-sessions'] as const,
   todaySessions: (date: string) => ['attendance-sessions', date] as const,
+  /** Prefix semua query sesi per token. */
+  sessionByTokenPrefix: ['attendance-session'] as const,
   sessionByToken: (token: string) => ['attendance-session', token] as const,
 };
 
@@ -257,19 +283,25 @@ export function useSessionByToken(token: string) {
 
 /**
  * Mutasi absen (RPC record_attendance) + invalidasi cache sesi supaya
- * status & waktu scan terbaru (scanned_at) ter-refresh setelah absen.
- * `onSuccess` komponen menampilkan hasil (status + jam scan).
+ * status & waktu scan terbaru (scanned_at) ter-refetch setelah absen.
+ *
+ * Invalidation berbasis PREFIX — ['attendance-sessions'] (list hari
+ * ini, semua tanggal) dan ['attendance-session'] (semua token) —
+ * bukan key penuh, supaya refetch selalu terjadi setelah scan
+ * berhasil apa pun token/tanggal aktif. Token tetap lewat mutasi:
+ * `mutate(token)`.
  */
-export function useRecordAttendance(
-  token = '',
-): UseMutationResult<RecordAttendanceResult, Error, string> {
+export function useRecordAttendance(): UseMutationResult<
+  RecordAttendanceResult,
+  Error,
+  string
+> {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (t: string) => recordAttendance(t),
     onSuccess: () => {
-      const date = wibDateKey(new Date());
-      qc.invalidateQueries({ queryKey: queryKeys.todaySessions(date) });
-      qc.invalidateQueries({ queryKey: queryKeys.sessionByToken(token) });
+      qc.invalidateQueries({ queryKey: queryKeys.todaySessionsPrefix });
+      qc.invalidateQueries({ queryKey: queryKeys.sessionByTokenPrefix });
     },
   });
 }

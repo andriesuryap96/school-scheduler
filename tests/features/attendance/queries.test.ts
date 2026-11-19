@@ -90,7 +90,7 @@ describe('recordAttendance', () => {
     expect(res.message).toBe('Sesi sudah berakhir');
   });
 
-  it('memetakan { ok: true, duplicate: true } ke "Kamu sudah tercatat hadir"', async () => {
+  it('memetakan { ok: true, duplicate: true, status: hadir } ke "Kamu sudah tercatat Hadir"', async () => {
     rpc.mockResolvedValue({
       data: { ok: true, status: 'hadir', duplicate: true },
       error: null,
@@ -99,8 +99,25 @@ describe('recordAttendance', () => {
     const res = await recordAttendance('tok-1');
 
     expect(res.ok).toBe(true);
-    if (res.ok) expect(res.duplicate).toBe(true);
-    expect(res.message).toBe('Kamu sudah tercatat hadir');
+    if (res.ok) {
+      expect(res.duplicate).toBe(true);
+      // Duplicate: TANPA scannedAt — waktu scan re-click tidak boleh
+      // dipakai sebagai waktu scan; waktu otoritatif datang dari
+      // attendance_records.scanned_at setelah refetch sesi.
+      expect(res.scannedAt).toBeUndefined();
+    }
+    expect(res.message).toBe('Kamu sudah tercatat Hadir');
+  });
+
+  it('duplicate dengan status terlambat TIDAK dilabeli "hadir"', async () => {
+    rpc.mockResolvedValue({
+      data: { ok: true, status: 'terlambat', duplicate: true },
+      error: null,
+    });
+
+    const res = await recordAttendance('tok-1');
+
+    expect(res.message).toBe('Kamu sudah tercatat Terlambat');
   });
 
   it('memetakan { ok: false, reason: "not_yours" } ke "Link ini bukan untuk jadwal mengajar kamu"', async () => {
@@ -285,6 +302,80 @@ describe('getSessionByToken', () => {
     const session = await getSessionByToken('tok-hantu');
 
     expect(session).toBeNull();
+  });
+});
+
+// =====================================================================
+// useRecordAttendance — invalidasi prefix (refetch sesi setelah scan)
+// =====================================================================
+
+describe('useRecordAttendance invalidation', () => {
+  // ScanPage memanggil useRecordAttendance() TANPA argumen; refetch
+  // sesi harus tetap terjadi (invalidasi prefix, bukan key per token).
+  it('menginvalidasi query sesi per-token (prefix) setelah scan sukses', async () => {
+    const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
+    const { renderHook, waitFor, act } = await import('@testing-library/react');
+    const { createElement } = await import('react');
+    const { useRecordAttendance, useSessionByToken, useTodaySessions } = await import(
+      '@/features/attendance/queries'
+    );
+
+    // Data "server": mulai tanpa record (belum absen).
+    let hasRecord = false;
+    const sessionRow = () => ({
+      ...RAW_SESSION_ROW,
+      attendance_records: hasRecord
+        ? [{ status: 'hadir', scanned_at: '2026-11-19T00:02:00.000Z' }]
+        : [],
+    });
+    // Satu builder melayani query list (.order → array) dan
+    // query single (.single → objek) dari data yang sama.
+    const makeServerBuilder = () => {
+      const row = sessionRow();
+      const b: Record<string, ReturnType<typeof vi.fn>> = {};
+      b.select = vi.fn(() => b);
+      b.eq = vi.fn(() => b);
+      b.order = vi.fn(() => Promise.resolve({ data: [row], error: null }));
+      b.single = vi.fn(() => Promise.resolve({ data: row, error: null }));
+      return b as unknown as Record<string, ReturnType<typeof vi.fn>>;
+    };
+    from.mockImplementation(makeServerBuilder);
+    rpc.mockResolvedValue({
+      data: { ok: true, status: 'hadir', duplicate: false },
+      error: null,
+    });
+
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      createElement(QueryClientProvider, { client: qc }, children);
+
+    const sessionHook = renderHook(() => useSessionByToken('tok-1'), { wrapper });
+    const todayHook = renderHook(() => useTodaySessions(), { wrapper });
+    const recordHook = renderHook(() => useRecordAttendance(), { wrapper });
+
+    await waitFor(() => expect(sessionHook.result.current.data?.record).toBeNull());
+
+    // setelah scan: "server" sekarang punya record
+    hasRecord = true;
+
+    await act(async () => {
+      await recordHook.result.current.mutateAsync('tok-1');
+    });
+
+    // Kriteria: query sesi per-token TER-REFETCH (record muncul),
+    // walau hook mutasi tidak menerima token.
+    await waitFor(() => {
+      expect(sessionHook.result.current.data?.record?.status).toBe('hadir');
+    });
+    await waitFor(() => {
+      expect(todayHook.result.current.data?.[0]?.record?.status).toBe('hadir');
+    });
+
+    sessionHook.unmount();
+    todayHook.unmount();
+    recordHook.unmount();
   });
 });
 

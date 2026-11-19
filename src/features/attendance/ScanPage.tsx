@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { resolveScanResult } from '@/domain/attendance';
 import { useSessionByToken, useRecordAttendance, wibTime, toSessionWindow } from './queries';
 import type { RecordAttendanceResult } from './queries';
+import type { AttendanceStatus } from '@/domain/types';
 
 function Spinner() {
   return (
@@ -43,19 +44,42 @@ function ClientPreview({ startsAt, endsAt }: { startsAt: string; endsAt: string 
 
 /**
  * Panel hasil setelah menekan "Konfirmasi Kehadiran".
- * ok → status (Huruf awal besar) + waktu scan WIB.
+ *
+ * ok (scan baru) → status + waktu scan WIB (waktu client, yang
+ * dikirim ke RPC ± detik).
+ * ok (duplicate) → pesan duplicate; waktu scan otoritatif diambil
+ * dari record sesi yang di-refetch (`sessionRecord`) — bila belum
+ * tersedia, tampilkan pesan TANPA timestamp (jangan pakai waktu
+ * re-click, itu salah).
  * !ok → pesan error Indonesia dari RPC.
  */
-function ResultPanel({ result }: { result: RecordAttendanceResult }) {
+function ResultPanel({
+  result,
+  sessionRecord,
+}: {
+  result: RecordAttendanceResult;
+  sessionRecord: { status: AttendanceStatus; scannedAt: string } | null;
+}) {
   if (result.ok) {
     const status = result.status === 'hadir' ? 'Hadir' : 'Terlambat';
+    // Waktu scan: duplicate → scanned_at dari record (refetch); scan
+    // baru → waktu client (RPC mencatat now() saat dipanggil).
+    const scanTimeIso = result.duplicate
+      ? sessionRecord?.scannedAt
+      : result.scannedAt?.toISOString();
     return (
       <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4" role="status">
         <p className="font-medium text-emerald-900">{result.message}</p>
-        <p className="mt-1 text-sm text-emerald-800">
-          Status: <span className="font-semibold">{status}</span> · Pukul{' '}
-          {wibTime(result.scannedAt.toISOString())} WIB
-        </p>
+        {scanTimeIso ? (
+          <p className="mt-1 text-sm text-emerald-800">
+            Status: <span className="font-semibold">{status}</span> · Pukul{' '}
+            {wibTime(scanTimeIso)} WIB
+          </p>
+        ) : (
+          <p className="mt-1 text-sm text-emerald-800">
+            Status: <span className="font-semibold">{status}</span>
+          </p>
+        )}
         {result.duplicate && (
           <p className="mt-1 text-xs text-emerald-700">
             Tidak ada record baru yang dibuat.
@@ -124,7 +148,8 @@ export default function ScanPage() {
               </div>
               {sessionQ.data.record && (
                 <p className="mt-2 text-sm text-emerald-700">
-                  Kamu sudah tercatat hadir pukul{' '}
+                  Kamu sudah tercatat{' '}
+                  {sessionQ.data.record.status === 'hadir' ? 'Hadir' : 'Terlambat'} pukul{' '}
                   {wibTime(sessionQ.data.record.scannedAt)} WIB.
                 </p>
               )}
@@ -139,7 +164,13 @@ export default function ScanPage() {
               {record.isPending ? 'Mencatat…' : 'Konfirmasi Kehadiran'}
             </button>
 
-            {result && <ResultPanel result={result} />}
+            {result && (
+              <ResultPanel result={result} sessionRecord={sessionQ.data?.record ?? null} />
+            )}
+
+            {record.error && (
+              <ErrorBox message={`Gagal mencatat kehadiran: ${record.error.message}`} />
+            )}
 
             <div className={`${cardCls} text-center`}>
               <p className="text-sm font-medium text-slate-700">
