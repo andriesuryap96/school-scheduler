@@ -58,3 +58,11 @@ $$;
 -- 17:00 UTC = 00:00 WIB, membuat sesi untuk hari berikutnya.
 select cron.schedule('generate-sessions-daily', '0 17 * * *',
   $$select generate_sessions_for_date((now() at time zone 'Asia/Jakarta')::date + 1)$$);
+
+-- SECURITY DEFINER function defaults to PUBLIC execute (incl. anon).
+-- Match the 0003 pattern: revoke from public/anon, grant to authenticated.
+-- pg_cron runs the scheduled statement as the job owner (postgres/superuser,
+-- which bypasses revokes), so the cron job above is unaffected.
+revoke execute on function generate_sessions_for_date(date) from public;
+revoke execute on function generate_sessions_for_date(date) from anon;
+grant execute on function generate_sessions_for_date(date) to authenticated;
