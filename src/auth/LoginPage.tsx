@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/auth/useAuth';
 
 /** Pesan error login Supabase → teks Indonesia siap tampil. */
@@ -16,13 +17,19 @@ function loginErrorMessage(message: string): string {
  * di sini TIDAK ada kode navigasi.
  */
 export default function LoginPage() {
-  const { signIn, loading } = useAuth();
+  const { user, signIn, loading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const busy = loading || submitting;
+
+  // Login sukses → user terisi → alihkan ke '/', HomeRedirect di router
+  // yang kemudian mengarahkan sesuai role (per-role redirect).
+  if (user) {
+    return <Navigate to="/" replace />;
+  }
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();

@@ -11,7 +11,7 @@
 --
 -- After the drops below, the surviving policies on these tables are:
 --   schedules:            kepala_sekolah all (school-scoped),
---                         guru select (own rows), superadmin all (0002)
+--                         guru select (own rows)
 --   schedule_exceptions:  kepala_sekolah all (school-scoped)
 --
 -- Note: superadmin has no policy on schedules/schedule_exceptions in 0002
