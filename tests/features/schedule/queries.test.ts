@@ -15,6 +15,19 @@ import {
   deleteException,
 } from '@/features/schedule/queries';
 
+// Payload jadwal standar untuk semua test — school_id wajib dikirim
+// karena skema: schedules.school_id uuid NOT NULL tanpa default.
+const SCHEDULE_INPUT = {
+  school_id: 'sch-1',
+  teacher_id: 'guru-1',
+  class_id: 'kelas-1',
+  subject_id: 'mapel-1',
+  day_of_week: 1,
+  start_time: '08:00',
+  end_time: '09:30',
+  academic_year_id: 'tahun-1',
+};
+
 /**
  * Builder query Supabase palsu (mengikuti pola tests/features/admin/queries.test.ts).
  * - `awaited`: hasil saat builder di-awaited langsung (insert / update().eq() / delete().eq()).
@@ -39,19 +52,12 @@ describe('createSchedule', () => {
     const b = makeBuilder();
     from.mockReturnValue(b);
 
-    await createSchedule({
-      teacher_id: 'guru-1',
-      class_id: 'kelas-1',
-      subject_id: 'mapel-1',
-      day_of_week: 1,
-      start_time: '08:00',
-      end_time: '09:30',
-      academic_year_id: 'tahun-1',
-    });
+    await createSchedule(SCHEDULE_INPUT);
 
     expect(from).toHaveBeenCalledWith('schedules');
     expect(b.insert).toHaveBeenCalledTimes(1);
     expect(b.insert).toHaveBeenCalledWith({
+      school_id: 'sch-1',
       teacher_id: 'guru-1',
       class_id: 'kelas-1',
       subject_id: 'mapel-1',
@@ -60,6 +66,17 @@ describe('createSchedule', () => {
       end_time: '09:30',
       academic_year_id: 'tahun-1',
     });
+  });
+
+  it('mengirim school_id di payload (kolom NOT NULL tanpa default)', async () => {
+    const b = makeBuilder();
+    from.mockReturnValue(b);
+
+    await createSchedule(SCHEDULE_INPUT);
+
+    expect(b.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ school_id: 'sch-1' }),
+    );
   });
 
   it('melempar pesan Indonesia bila constraint 23514 (end_time <= start_time)', async () => {
@@ -69,15 +86,7 @@ describe('createSchedule', () => {
     from.mockReturnValue(b);
 
     await expect(
-      createSchedule({
-        teacher_id: 'guru-1',
-        class_id: 'kelas-1',
-        subject_id: 'mapel-1',
-        day_of_week: 1,
-        start_time: '10:00',
-        end_time: '08:00',
-        academic_year_id: 'tahun-1',
-      }),
+      createSchedule({ ...SCHEDULE_INPUT, start_time: '10:00', end_time: '08:00' }),
     ).rejects.toThrow('Jam selesai harus setelah jam mulai');
   });
 
@@ -87,17 +96,9 @@ describe('createSchedule', () => {
     });
     from.mockReturnValue(b);
 
-    await expect(
-      createSchedule({
-        teacher_id: 'guru-1',
-        class_id: 'kelas-1',
-        subject_id: 'mapel-1',
-        day_of_week: 1,
-        start_time: '08:00',
-        end_time: '09:30',
-        academic_year_id: 'tahun-1',
-      }),
-    ).rejects.toThrow('foreign key violation');
+    await expect(createSchedule(SCHEDULE_INPUT)).rejects.toThrow(
+      'foreign key violation',
+    );
   });
 });
 
@@ -107,17 +108,17 @@ describe('updateSchedule', () => {
     from.mockReturnValue(b);
 
     await updateSchedule('jadwal-1', {
+      ...SCHEDULE_INPUT,
       teacher_id: 'guru-2',
-      class_id: 'kelas-1',
       subject_id: 'mapel-2',
       day_of_week: 2,
       start_time: '07:00',
       end_time: '08:30',
-      academic_year_id: 'tahun-1',
     });
 
     expect(from).toHaveBeenCalledWith('schedules');
     expect(b.update).toHaveBeenCalledWith({
+      school_id: 'sch-1',
       teacher_id: 'guru-2',
       class_id: 'kelas-1',
       subject_id: 'mapel-2',
@@ -136,15 +137,7 @@ describe('updateSchedule', () => {
     from.mockReturnValue(b);
 
     await expect(
-      updateSchedule('jadwal-1', {
-        teacher_id: 'guru-1',
-        class_id: 'kelas-1',
-        subject_id: 'mapel-1',
-        day_of_week: 1,
-        start_time: '09:00',
-        end_time: '08:00',
-        academic_year_id: 'tahun-1',
-      }),
+      updateSchedule('jadwal-1', { ...SCHEDULE_INPUT, start_time: '09:00', end_time: '08:00' }),
     ).rejects.toThrow('Jam selesai harus setelah jam mulai');
   });
 });

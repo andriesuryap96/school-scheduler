@@ -5,6 +5,7 @@ import { useCreateSchedule, useUpdateSchedule, DAY_NAMES, WEEK_ORDER } from './q
 import type { ScheduleInput, ScheduleRow } from './queries';
 
 interface ScheduleFormProps {
+  schoolId: string;
   academicYearId: string;
   teachers: { id: string; name: string }[];
   classes: { id: string; name: string }[];
@@ -16,6 +17,7 @@ interface ScheduleFormProps {
 
 /** Form tambah/ubah jadwal (sheet): guru, kelas, mapel, hari, jam mulai/selesai. */
 export function ScheduleForm({
+  schoolId,
   academicYearId,
   teachers,
   classes,
@@ -38,6 +40,7 @@ export function ScheduleForm({
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const input: ScheduleInput = {
+      school_id: schoolId,
       teacher_id: teacherId,
       class_id: classId,
       subject_id: subjectId,

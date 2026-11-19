@@ -114,6 +114,8 @@ export async function listExceptions(schoolId: string): Promise<ExceptionRow[]> 
 // =====================================================================
 
 export interface ScheduleInput {
+  /** Wajib: schedules.school_id NOT NULL tanpa default di skema. */
+  school_id: string;
   teacher_id: string;
   class_id: string;
   subject_id: string;
@@ -125,6 +127,7 @@ export interface ScheduleInput {
 
 export async function createSchedule(input: ScheduleInput): Promise<void> {
   const { error } = await supabase.from('schedules').insert({
+    school_id: input.school_id,
     teacher_id: input.teacher_id,
     class_id: input.class_id,
     subject_id: input.subject_id,
@@ -140,6 +143,7 @@ export async function updateSchedule(id: string, input: ScheduleInput): Promise<
   const { error } = await supabase
     .from('schedules')
     .update({
+      school_id: input.school_id,
       teacher_id: input.teacher_id,
       class_id: input.class_id,
       subject_id: input.subject_id,

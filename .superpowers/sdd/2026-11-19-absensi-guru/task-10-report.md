@@ -52,7 +52,7 @@ Key tests: `createSchedule` payload; 23514 → Indonesian message (create + upda
 - Weekly grid: `WEEK_ORDER = [1..6, 0]` (Senin–Minggu, `day_of_week` 0=Minggu per schema). Desktop = `grid-cols-7`; mobile = `<DayList>` with per-day `<h2>` headings; both render from the same `ScheduleRow[]` via CSS `md:hidden` / `hidden md:block`.
 - Schedule cards show resolved names (guru/kelas/mapel from master data) with UUID fallback; Ubah/Hapus actions.
 - ExceptionForm toggle: radio "Semua jadwal" vs "Satu jadwal saja" (disabled + hint when no schedules exist); single-schedule path requires a schedule selection (`required`).
-- Shared hook `useSchedulePageData`: for `kepala_sekolah` reads `school_id` from JWT `app_metadata` (matches RLS `auth_school_id()` in 0002_rls.sql); for `superadmin` falls back to first school (AdminPage convention), so the pages are also demoable by superadmin.
+- Shared hook `useSchedulePageData`: for `kepala_sekolah` reads `school_id` from JWT `app_metadata` (matches RLS `auth_school_id()` in 0002_rls.sql); for `superadmin` falls back to first school (AdminPage convention), and **all** master-data hooks are keyed to that resolved id, so the fallback is genuinely functional (see Fix section — original submission had a dead fallback, repaired in bd855f0).
 
 ## ExceptionPage routing decision
 
@@ -64,3 +64,33 @@ Route: **`/pengecualian`**, top-level (sibling of `/jadwal`), guarded by `Requir
 ## Deferred verification (per ledger ruling)
 
 Step 7 (manual: login as kepala sekolah, add Senin 08:00–09:30 schedule + 25 Des 2026 `libur_nasional` exception) was **not** run — no live Supabase in this environment. Covered instead by: 11 unit tests on payload/error mapping, `tsc -b` clean, production build clean, and router route registered.
+
+---
+
+## Fix Section (review findings — commit `fix: send school_id on schedule insert and repair school resolution`)
+
+### Finding 1: createSchedule omitted school_id (CONFIRMED REAL)
+
+`schedules.school_id` is `uuid NOT NULL` with no default/trigger (0001_schema.sql:52), so the original insert would fail at the DB. Fix:
+
+- `ScheduleInput` now includes required `school_id: string` (exported type, same pattern as `createException`'s input).
+- `createSchedule` and `updateSchedule` send `school_id` in their payloads.
+- Tests: payload constants now include `school_id: 'sch-1'`; exact-payload assertions for create/update include it; added an explicit test `mengirim school_id di payload (kolom NOT NULL tanpa default)` using `expect.objectContaining({ school_id: 'sch-1' })`. 12 tests total (was 11).
+- Call sites: `ScheduleForm` takes `schoolId` prop and includes it in the `ScheduleInput`; `SchedulePage` passes `data.schoolId`.
+
+### Finding 2: superadmin fallback in useSchedulePageData was broken/dead
+
+The original code called `useAcademicYears(schoolId)` etc. with the *state* variable (empty for superadmin) and only computed `resolvedSchoolId` afterward for the return value — so master data never loaded for superadmin. Fix (preferred option — make it work): resolve the school id once (`metadataSchoolId` for kepala_sekolah from JWT `app_metadata`, else `schoolsQ.data?.[0]?.id` for superadmin) **before** the master-data hooks, and pass that resolved id to `useAcademicYears`/`useSubjects`/`useClasses`/`useUsers`. The `enabled: !!schoolId` guards on those hooks (in admin/queries.ts) hold queries while the id is empty, and once `useSchools` resolves, all master data loads for superadmin. Also: `schoolsQ.error` now surfaces for superadmin, and `masterPending` now covers the pre-resolution state. Report claim corrected above (the "pages are also demoable by superadmin" line was false for the original submission).
+
+### Tests run after fixes
+
+```
+$ npx vitest run tests/features/schedule/queries.test.ts
+Test Files  1 passed (1) · Tests  12 passed (12)
+
+$ npx vitest run            # full suite
+Test Files  7 passed (7) · Tests  41 passed (41)
+
+$ npx tsc -b --force        # clean (exit 0)
+$ npm run build             # clean, 135 modules
+```

@@ -23,42 +23,62 @@ export interface SchedulePageData {
  * Gating data untuk SchedulePage/ExceptionPage: menentukan schoolId dan
  * tahun ajaran aktif, plus master data guru/kelas/mapel untuk dropdown.
  *
- * - superadmin: memakai sekolah pertama (sama seperti AdminPage).
  * - kepala_sekolah: school_id dari JWT app_metadata (satu sekolah per akun).
+ * - superadmin: sekolah pertama dari useSchools (satu sekolah aktif pada
+ *   satu waktu — konvensi AdminPage).
+ *
+ * SEMUA hook master data (tahun ajaran/mapel/kelas/guru) dipanggil dengan
+ * id sekolah hasil resolusi di atas, jadi fallback superadmin benar-benar
+ * berfungsi — bukan hanya mengisi `schoolId`.
  */
 export function useSchedulePageData(): SchedulePageData {
   const { role, user } = useAuth();
-  const [schoolId, setSchoolId] = useState('');
-  const [schoolIdError, setSchoolIdError] = useState<string | null>(null);
+  const [metadataSchoolId, setMetadataSchoolId] = useState('');
+  const [metadataError, setMetadataError] = useState<string | null>(null);
 
   useEffect(() => {
     if (role === 'kepala_sekolah') {
       const sid = (user?.app_metadata as Record<string, unknown> | undefined)?.school_id;
       if (typeof sid === 'string' && sid) {
-        setSchoolId(sid);
+        setMetadataSchoolId(sid);
       } else {
-        setSchoolIdError('school_id tidak ditemukan di profil akun.');
+        setMetadataError('school_id tidak ditemukan di profil akun.');
       }
     }
   }, [role, user]);
 
+  // superadmin: daftar sekolah untuk fallback "sekolah pertama".
   const schoolsQ = useSchools();
+
+  // Resolve SEKALI, lalu pakai id hasil resolusi untuk semua hook master
+  // data. Hooks selalu dipanggil (aturan React); `enabled: !!schoolId`
+  // pada useAcademicYears/useSubjects/useClasses/useUsers menahan query
+  // saat id masih kosong.
+  const schoolId =
+    role === 'kepala_sekolah'
+      ? metadataSchoolId
+      : (schoolsQ.data?.[0]?.id ?? '');
+
   const yearsQ = useAcademicYears(schoolId);
   const subjectsQ = useSubjects(schoolId);
   const classesQ = useClasses(schoolId);
   const usersQ = useUsers(schoolId);
 
-  // superadmin: satu sekolah aktif pada satu waktu (pola AdminPage).
-  const resolvedSchoolId = role === 'kepala_sekolah' ? schoolId : schoolsQ.data?.[0]?.id ?? '';
-
   const masterPending =
-    (role === 'kepala_sekolah' && !schoolId) ||
-    (resolvedSchoolId && (yearsQ.isPending || subjectsQ.isPending || classesQ.isPending || usersQ.isPending));
+    !schoolId ||
+    yearsQ.isPending ||
+    subjectsQ.isPending ||
+    classesQ.isPending ||
+    usersQ.isPending;
 
   const masterError =
-    schoolIdError ??
-    (resolvedSchoolId &&
-      (yearsQ.error?.message ?? subjectsQ.error?.message ?? classesQ.error?.message ?? usersQ.error?.message)) ??
+    metadataError ??
+    (role === 'superadmin' ? schoolsQ.error?.message : null) ??
+    (schoolId &&
+      (yearsQ.error?.message ??
+        subjectsQ.error?.message ??
+        classesQ.error?.message ??
+        usersQ.error?.message)) ??
     null;
 
   const activeYear = yearsQ.data?.find((y) => y.is_active) ?? null;
@@ -66,7 +86,7 @@ export function useSchedulePageData(): SchedulePageData {
   return {
     loading: !!masterPending,
     error: masterError,
-    schoolId: resolvedSchoolId,
+    schoolId,
     activeYear: activeYear ? { id: activeYear.id, name: activeYear.name } : null,
     hasYears: (yearsQ.data?.length ?? 0) > 0,
     teachers: usersQ.data

@@ -298,6 +298,7 @@ export default function SchedulePage() {
         title={editing ? 'Ubah Jadwal' : 'Tambah Jadwal'}
       >
         <ScheduleForm
+          schoolId={data.schoolId}
           academicYearId={yearId}
           teachers={data.teachers}
           classes={data.classes}
