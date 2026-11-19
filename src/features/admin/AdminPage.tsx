@@ -42,6 +42,15 @@ function EmptyCard({ text }: { text: string }) {
   );
 }
 
+/** Hint saat belum ada sekolah: form terkait tidak bisa dipakai. */
+function NoSchoolHint() {
+  return (
+    <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+      Tambahkan sekolah terlebih dahulu di tab Sekolah.
+    </p>
+  );
+}
+
 const cardCls = 'rounded-xl border border-slate-200 bg-white p-4 shadow-sm';
 
 /** Halaman data master Super Admin: tab Sekolah · Tahun Ajaran ·
@@ -167,13 +176,23 @@ export default function AdminPage() {
                   </div>
                 ))
               ))}
+            {activateYear.error && (
+              <p
+                role="alert"
+                className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700"
+              >
+                Gagal mengaktifkan tahun ajaran: {activateYear.error.message}
+              </p>
+            )}
             <button
               type="button"
               onClick={() => setSheetOpen(true)}
-              className="w-full rounded-lg bg-sky-600 py-2.5 font-medium text-white"
+              disabled={!schoolId}
+              className="w-full rounded-lg bg-sky-600 py-2.5 font-medium text-white disabled:opacity-60"
             >
               Tambah Tahun Ajaran
             </button>
+            {!schoolId && <NoSchoolHint />}
           </section>
         )}
 
@@ -197,10 +216,12 @@ export default function AdminPage() {
             <button
               type="button"
               onClick={() => setSheetOpen(true)}
-              className="w-full rounded-lg bg-sky-600 py-2.5 font-medium text-white"
+              disabled={!schoolId}
+              className="w-full rounded-lg bg-sky-600 py-2.5 font-medium text-white disabled:opacity-60"
             >
               Tambah Mata Pelajaran
             </button>
+            {!schoolId && <NoSchoolHint />}
           </section>
         )}
 
@@ -224,10 +245,12 @@ export default function AdminPage() {
             <button
               type="button"
               onClick={() => setSheetOpen(true)}
-              className="w-full rounded-lg bg-sky-600 py-2.5 font-medium text-white"
+              disabled={!schoolId}
+              className="w-full rounded-lg bg-sky-600 py-2.5 font-medium text-white disabled:opacity-60"
             >
               Tambah Kelas
             </button>
+            {!schoolId && <NoSchoolHint />}
           </section>
         )}
 
@@ -271,10 +294,12 @@ export default function AdminPage() {
             <button
               type="button"
               onClick={() => setSheetOpen(true)}
-              className="w-full rounded-lg bg-sky-600 py-2.5 font-medium text-white"
+              disabled={!schoolId}
+              className="w-full rounded-lg bg-sky-600 py-2.5 font-medium text-white disabled:opacity-60"
             >
               Tambah Guru
             </button>
+            {!schoolId && <NoSchoolHint />}
           </section>
         )}
       </div>
