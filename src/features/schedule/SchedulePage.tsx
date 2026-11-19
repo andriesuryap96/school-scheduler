@@ -209,6 +209,12 @@ export default function SchedulePage() {
             >
               Pengecualian
             </Link>
+            <Link
+              to="/laporan"
+              className="text-sm font-medium text-sky-700 hover:text-sky-900"
+            >
+              Laporan
+            </Link>
             <button
               type="button"
               onClick={() => void signOut()}
