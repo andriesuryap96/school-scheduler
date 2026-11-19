@@ -1,4 +1,4 @@
-import type { SessionWindow, AttendancePolicy, ScanResult } from '@/domain/types';
+import type { SessionWindow, AttendancePolicy, ScanResult, AttendanceStatus } from '@/domain/types';
 
 /**
  * Menentukan hasil scan guru terhadap jendela sesi dan kebijakan sekolah.
@@ -30,4 +30,22 @@ export function resolveScanResult(
   }
 
   return { ok: true, status: 'terlambat' };
+}
+
+/**
+ * Menentukan status akhir guru untuk keperluan laporan.
+ *
+ * Bila record tidak null (guru sudah absen) → kembalikan status record.
+ * Selain itu → 'tidak_hadir' (dihitung saat laporan; sesi yang belum lewat
+ * pun belum punya record, dan laporan hanya menampilkan sesi yang sudah lewat).
+ */
+export function resolveFinalStatus(
+  record: { status: AttendanceStatus } | null,
+  _window: SessionWindow,
+  _now: Date,
+): AttendanceStatus {
+  if (record !== null) {
+    return record.status;
+  }
+  return 'tidak_hadir';
 }

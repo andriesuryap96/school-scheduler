@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveScanResult } from '@/domain/attendance';
+import { resolveScanResult, resolveFinalStatus } from '@/domain/attendance';
 import type { SessionWindow, AttendancePolicy } from '@/domain/types';
 
 const window: SessionWindow = {
@@ -44,5 +44,27 @@ describe('resolveScanResult', () => {
   it('menolak scan satu detik setelah jam selesai', () => {
     expect(resolveScanResult(at('2026-11-20T02:30:01Z'), window, policy))
       .toEqual({ ok: false, reason: 'expired' });
+  });
+});
+
+describe('resolveFinalStatus', () => {
+  it('mengembalikan status record bila sudah absen', () => {
+    expect(resolveFinalStatus({ status: 'terlambat' }, window, at('2026-11-20T05:00:00Z')))
+      .toBe('terlambat');
+  });
+
+  it('mengembalikan tidak_hadir bila belum absen dan sesi sudah selesai', () => {
+    expect(resolveFinalStatus(null, window, at('2026-11-20T02:30:01Z')))
+      .toBe('tidak_hadir');
+  });
+
+  it('mengembalikan tidak_hadir bila belum absen dan sekarang persis jam selesai', () => {
+    expect(resolveFinalStatus(null, window, at('2026-11-20T02:30:00Z')))
+      .toBe('tidak_hadir');
+  });
+
+  it('tetap tidak_hadir untuk sesi yang belum dimulai', () => {
+    expect(resolveFinalStatus(null, window, at('2026-11-20T00:00:00Z')))
+      .toBe('tidak_hadir');
   });
 });
