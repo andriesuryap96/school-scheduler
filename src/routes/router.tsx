@@ -5,6 +5,7 @@ import { useAuth } from '@/auth/useAuth';
 import LoginPage from '@/auth/LoginPage';
 import AdminPage from '@/features/admin/AdminPage';
 import SchedulePage from '@/features/schedule/SchedulePage';
+import ExceptionPage from '@/features/schedule/ExceptionPage';
 import ReportsPage from '@/features/reports/ReportsPage';
 import TodayPage from '@/features/attendance/TodayPage';
 import ScanPage from '@/features/attendance/ScanPage';
@@ -55,6 +56,17 @@ const routes: RouteObject[] = [
     element: (
       <RequireRole allow={['kepala_sekolah']}>
         <SchedulePage />
+      </RequireRole>
+    ),
+  },
+  {
+    // Pengecualian jadwal (libur nasional, ulangan umum, event) —
+    // satu tingkat dengan /jadwal, kepala_sekolah saja, di-link dari
+    // header SchedulePage.
+    path: '/pengecualian',
+    element: (
+      <RequireRole allow={['kepala_sekolah']}>
+        <ExceptionPage />
       </RequireRole>
     ),
   },
