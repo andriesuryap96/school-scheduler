@@ -24,7 +24,7 @@ begin
     return jsonb_build_object('ok', false, 'reason', 'not_found');
   end if;
 
-  if v_session.teacher_id <> auth.uid() then
+  if v_session.teacher_id is distinct from auth.uid() then
     return jsonb_build_object('ok', false, 'reason', 'not_yours');
   end if;
 
