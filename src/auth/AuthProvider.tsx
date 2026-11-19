@@ -26,6 +26,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(data.session?.user ?? null);
         setRole(roleFromSession(data.session));
       })
+      .catch(() => {
+        // Gagal mengambil sesi (mis. jaringan/timeout) → anggap
+        // logged-out; onAuthStateChange akan memperbaiki bila ada.
+        setUser(null);
+        setRole(null);
+      })
       .finally(() => setLoading(false));
 
     const {

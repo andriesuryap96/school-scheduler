@@ -23,7 +23,7 @@ describe('App', () => {
     render(<App />);
     // Session null → role null → HomeRedirect mengalihkan ke /login.
     expect(
-      await screen.findByRole('heading', { name: /login/i }),
+      await screen.findByRole('heading', { name: /masuk/i }),
     ).toBeInTheDocument();
   });
 });

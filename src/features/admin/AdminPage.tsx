@@ -282,15 +282,17 @@ export default function AdminPage() {
             {usersQ.isPending && <Spinner />}
             {usersQ.error && <ErrorBox message={usersQ.error.message} />}
             {usersQ.data &&
-              usersQ.data.map((u) => (
-                <div key={u.id} className={cardCls}>
-                  <p className="font-medium text-slate-900">{u.name}</p>
-                  <p className="mt-1 text-sm text-slate-500">{u.email}</p>
-                  <span className="mt-2 inline-block rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
-                    {u.role}
-                  </span>
-                </div>
-              ))}
+              usersQ.data
+                .filter((u) => u.role === 'guru')
+                .map((u) => (
+                  <div key={u.id} className={cardCls}>
+                    <p className="font-medium text-slate-900">{u.name}</p>
+                    <p className="mt-1 text-sm text-slate-500">{u.email}</p>
+                    <span className="mt-2 inline-block rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+                      {u.role}
+                    </span>
+                  </div>
+                ))}
             <button
               type="button"
               onClick={() => setSheetOpen(true)}

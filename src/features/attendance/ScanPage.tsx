@@ -45,12 +45,12 @@ function ClientPreview({ startsAt, endsAt }: { startsAt: string; endsAt: string 
 /**
  * Panel hasil setelah menekan "Konfirmasi Kehadiran".
  *
- * ok (scan baru) → status + waktu scan WIB (waktu client, yang
- * dikirim ke RPC ± detik).
- * ok (duplicate) → pesan duplicate; waktu scan otoritatif diambil
- * dari record sesi yang di-refetch (`sessionRecord`) — bila belum
- * tersedia, tampilkan pesan TANPA timestamp (jangan pakai waktu
- * re-click, itu salah).
+ * ok (scan baru maupun duplicate) → status + waktu scan WIB; waktu
+ * otoritatif diambil dari record sesi yang di-refetch
+ * (`sessionRecord`). Bila refetch belum sempat mendarat (mis. race),
+ * fallback ke `result.scannedAt` (waktu client) — hanya untuk scan
+ * baru; duplicate tanpa fallback karena record lama tidak punya
+ * timestamp di RPC response (jangan pakai waktu re-click, itu salah).
  * !ok → pesan error Indonesia dari RPC.
  */
 function ResultPanel({
@@ -62,11 +62,11 @@ function ResultPanel({
 }) {
   if (result.ok) {
     const status = result.status === 'hadir' ? 'Hadir' : 'Terlambat';
-    // Waktu scan: duplicate → scanned_at dari record (refetch); scan
-    // baru → waktu client (RPC mencatat now() saat dipanggil).
-    const scanTimeIso = result.duplicate
-      ? sessionRecord?.scannedAt
-      : result.scannedAt?.toISOString();
+    // Waktu scan otoritatif: record hasil refetch (kedua jalur);
+    // fallback ke waktu client hanya bila refetch belum mendarat.
+    const scanTimeIso =
+      sessionRecord?.scannedAt ??
+      (result.duplicate ? undefined : result.scannedAt?.toISOString());
     return (
       <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4" role="status">
         <p className="font-medium text-emerald-900">{result.message}</p>
